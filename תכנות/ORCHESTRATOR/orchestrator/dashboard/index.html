@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Orchestrator Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #16213e;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .sidebar h2 {
+            color: #0f3460;
+            margin-bottom: 30px;
+        }
+        .sidebar button {
+            width: 80%;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            background-color: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        .sidebar button:hover {
+            background-color: #b7324c;
+        }
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .card {
+            background-color: #0f3460;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .card h3 {
+            color: #e94560;
+            margin-top: 0;
+        }
+        .input-task-container {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .input-task-container input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #16213e;
+            border-radius: 5px;
+            background-color: #2e2e4e;
+            color: #e0e0e0;
+            margin-right: 10px;
+        }
+        .input-task-container button {
+            padding: 10px 20px;
+            background-color: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .input-task-container button:hover {
+            background-color: #b7324c;
+        }
+        #live-status, #agent-activity {
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #1a1a2e;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #0f3460;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px dashed #16213e;
+            padding-bottom: 5px;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Orchestrator</h2>
+        <button onclick="showSection('task-runner')">Run Task</button>
+        <button onclick="showSection('status-view')">System Status</button>
+        <button onclick="showSection('task-history')">Task History</button>
+        <button onclick="showSection('improvement-log')">Improvement Log</button>
+        <button onclick="runBenchmark()">Run Benchmark</button>
+    </div>
+
+    <div class="main-content">
+        <div id="task-runner" class="card content-section">
+            <h3>Run New Task</h3>
+            <div class="input-task-container">
+                <input type="text" id="task-input" placeholder="Enter task description here...">
+                <button onclick="runTask()">Execute Task</button>
+            </div>
+            <div id="live-status">
+                <h4>Live Task Status:</h4>
+            </div>
+            <div id="running-cost" style="margin-top: 15px;">
+                <h4>Running Cost: $0.00</h4>
+            </div>
+        </div>
+
+        <div id="status-view" class="card content-section" style="display:none;">
+            <h3>System Status</h3>
+            <pre id="system-status-output"></pre>
+        </div>
+
+        <div id="task-history" class="card content-section" style="display:none;">
+            <h3>Task History</h3>
+            <div id="task-history-output">
+                <!-- Task history will be loaded here -->
+            </div>
+        </div>
+
+        <div id="improvement-log" class="card content-section" style="display:none;">
+            <h3>Improvement Log</h3>
+            <div id="improvement-log-output">
+                <!-- Improvement log will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let runningCost = 0.0;
+        let eventSource = null;
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.style.display = 'none';
+            });
+            document.getElementById(sectionId).style.display = 'block';
+
+            if (sectionId === 'status-view') {
+                fetchSystemStatus();
+            } else if (sectionId === 'task-history' || sectionId === 'improvement-log') {
+                fetchLogs();
+            }
+        }
+
+        async function runTask() {
+            const taskInput = document.getElementById('task-input');
+            const taskDescription = taskInput.value.trim();
+            if (!taskDescription) {
+                alert('Please enter a task description.');
+                return;
+            }
+
+            document.getElementById('live-status').innerHTML = '<h4>Live Task Status:</h4><p>Task started: ' + taskDescription + '</p>';
+            runningCost = 0.0;
+            document.getElementById('running-cost').innerText = 'Running Cost: $0.00';
+
+            try {
+                const response = await fetch('/run_task', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ task_description: taskDescription })
+                });
+                const data = await response.json();
+                console.log('Task run initiated:', data);
+                taskInput.value = ''; // Clear input
+            } catch (error) {
+                console.error('Error initiating task run:', error);
+                document.getElementById('live-status').innerHTML += '<p style="color: red;">Error starting task.</p>';
+            }
+        }
+
+        async function fetchSystemStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                document.getElementById('system-status-output').innerText = JSON.stringify(data, null, 2);
+            } catch (error) {
+                console.error('Error fetching system status:', error);
+                document.getElementById('system-status-output').innerText = 'Error loading system status.';
+            }
+        }
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/logs');
+                const data = await response.json();
+                const taskHistoryOutput = document.getElementById('task-history-output');
+                const improvementLogOutput = document.getElementById('improvement-log-output');
+
+                const logs = data.logs;
+                taskHistoryOutput.innerHTML = '<pre>' + logs + '</pre>';
+                improvementLogOutput.innerHTML = '<pre>' + logs + '</pre>'; // For MVP, improvement log is same as task history
+
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+                document.getElementById('task-history-output').innerText = 'Error loading task history.';
+                document.getElementById('improvement-log-output').innerText = 'Error loading improvement log.';
+            }
+        }
+
+
+        function runBenchmark() {
+            alert('Benchmark feature is not yet implemented in this MVP.');
+        }
+
+        // Initialize SSE
+        function initEventSource() {
+            if (eventSource) {
+                eventSource.close();
+            }
+            eventSource = new EventSource('/events');
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.message) {
+                    const statusDiv = document.getElementById('live-status');
+                    statusDiv.innerHTML += '<p class="log-entry">' + data.message + '</p>';
+                    statusDiv.scrollTop = statusDiv.scrollHeight;
+                }
+            };
+
+            eventSource.addEventListener('logs', function(event) {
+                const data = JSON.parse(event.data);
+                const logsContent = data.logs;
+                const taskHistoryOutput = document.getElementById('task-history-output');
+                const improvementLogOutput = document.getElementById('improvement-log-output');
+
+                taskHistoryOutput.innerHTML = '<pre>' + logsContent + '</pre>';
+                improvementLogOutput.innerHTML = '<pre>' + logsContent + '</pre>';
+            });
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+                // Attempt to reconnect after a delay
+                setTimeout(initEventSource, 5000);
+            };
+        }
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            showSection('task-runner');
+            initEventSource();
+            fetchLogs(); // Load initial logs
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+model: gemini-2.0-flash-lite
+trust_levels:
+  auto: [read_file, web_search, write_draft, run_tests]
+  confirm: [modify_file, install_package, api_call]
+  explicit: [send_message, deploy, delete]
+improvement:
+  guide_trigger_count: 3
+  optimizer_failure_threshold: 0.15
+token_budget:
+  daily_limit_usd: 2.0
+  hard_stop_usd: 2.0

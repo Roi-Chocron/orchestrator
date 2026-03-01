@@ -1,0 +1,10 @@
+google-generativeai
+fastapi
+uvicorn
+sqlmodel
+aiosqlite
+typer
+python-dotenv
+pyyaml
+rich
+httpx
